@@ -1,0 +1,3 @@
+# Networking
+
+Uses documentation-only IP ranges (192.0.2.0/24, 198.51.100.0/24).

@@ -1,0 +1,5 @@
+tunnel: EXAMPLE-ID
+credentials-file: /etc/cloudflared/example.json
+ingress:
+  - hostname: app.example.com
+    service: http://192.0.2.20:8080
