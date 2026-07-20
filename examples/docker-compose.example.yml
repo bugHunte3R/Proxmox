@@ -1,4 +1,29 @@
 services:
-  app:
-    image: example/app:latest
+  web-application:
+    image: example/application:latest
+    container_name: example-web-application
     restart: unless-stopped
+
+    environment:
+      APP_ENV: production
+      APP_SECRET: ${APP_SECRET}
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+
+    volumes:
+      - application-data:/app/data
+
+    networks:
+      - application-network
+
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  application-data:
+
+networks:
+  application-network:
+    driver: bridge

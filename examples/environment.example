@@ -1,1 +1,10 @@
+# Documentation placeholders only
+
 APP_SECRET=CHANGE_ME
+DATABASE_HOST=database
+DATABASE_NAME=example_database
+DATABASE_USER=example_user
+DATABASE_PASSWORD=CHANGE_ME
+
+PUBLIC_HOSTNAME=application.example.com
+INTERNAL_SERVICE_ADDRESS=192.0.2.20

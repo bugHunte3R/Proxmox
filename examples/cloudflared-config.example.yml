@@ -1,5 +1,16 @@
-tunnel: EXAMPLE-ID
-credentials-file: /etc/cloudflared/example.json
+# Sanitized documentation example.
+# Do not commit the real tunnel credentials file.
+
+tunnel: EXAMPLE-TUNNEL-ID
+credentials-file: /etc/cloudflared/EXAMPLE-TUNNEL-ID.json
+
+protocol: http2
+
 ingress:
-  - hostname: app.example.com
+  - hostname: application.example.com
     service: http://192.0.2.20:8080
+
+  - hostname: cloud.example.com
+    service: http://192.0.2.23:80
+
+  - service: http_status:404
