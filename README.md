@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/banner.svg" alt="Proxmox Homelab" width="100%"></p>
+
 # Proxmox Homelab — 2-node Proxmox VE cluster + Proxmox Backup Server
 
 ![Proxmox VE](https://img.shields.io/badge/Proxmox_VE-9-E57000?logo=proxmox&logoColor=white)
@@ -23,48 +25,23 @@ What it demonstrates:
 - Nextcloud administration and troubleshooting (PHP upgrade, database tuning, reverse-proxy trust)
 - Network redesign (Raspberry Pi NAT gateway → dedicated router) without changing the addressing plan
 
-> **Privacy:** this is a public repository. Addresses, hostnames, domains, guest IDs, hardware identifiers, exact versions, ports, credentials and account names are intentionally omitted or replaced with generic labels. See [SECURITY.md](SECURITY.md).
+> **Privacy:** this is a public repository. Real addresses, hostnames, domains, guest IDs, hardware identifiers, exact versions, ports, credentials and account names are intentionally omitted or replaced with generic labels. See [SECURITY.md](SECURITY.md).
 
 ---
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    Internet((Internet))
-    CF[Cloudflare edge]
-    GW[Router / gateway]
-    SW[Managed switch]
+<p align="center"><img src="assets/architecture.svg" alt="Homelab architecture" width="100%"></p>
 
-    GW --> SW
-    Internet --- CF
+| Role | Example address |
+|---|---|
+| Router / gateway | `10.10.10.1` |
+| Node 1 / Node 2 | `10.10.10.11` / `10.10.10.12` |
+| Proxmox Backup Server | `10.10.10.13` |
+| Docker host · tunnel connector · network controller | `10.10.10.20` · `.21` · `.22` |
+| Nextcloud VM · client staging | `10.10.10.30` · `.40` |
 
-    subgraph Cluster["Proxmox VE cluster (2 nodes)"]
-        direction LR
-        subgraph N1["Node 1 · SSD"]
-            NC["VM · Nextcloud"]
-        end
-        subgraph N2["Node 2 · HDD"]
-            DK["LXC · Docker host"]
-            TUN["LXC · Tunnel connector"]
-            NET["LXC · Network controller"]
-            STG["LXC · Client staging"]
-        end
-    end
-
-    PBS[("Proxmox Backup Server")]
-
-    SW --> N1
-    SW --> N2
-    SW --> PBS
-
-    TUN -. "outbound tunnel" .-> CF
-    TUN --> NC
-    TUN --> DK
-    TUN --> STG
-    NET -. manages .-> SW
-    N1 & N2 -->|scheduled backups| PBS
-```
+Addresses are a **fictional but consistent plan** used across all my repositories — not my real network.
 
 Detailed documentation:
 

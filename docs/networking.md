@@ -14,6 +14,21 @@ flowchart LR
 
 The LAN is a single private network. Each node has one physical NIC attached to a Linux bridge; every guest is bridged on it.
 
+## Example addressing plan (fictional)
+
+| Address | Role |
+|---|---|
+| `10.10.10.1` | Router / gateway |
+| `10.10.10.11` | Node 1 |
+| `10.10.10.12` | Node 2 |
+| `10.10.10.13` | Proxmox Backup Server |
+| `10.10.10.20` | Docker host |
+| `10.10.10.21` | Tunnel connector |
+| `10.10.10.22` | Network controller |
+| `10.10.10.30` | Nextcloud VM |
+| `10.10.10.40` | Client staging |
+| `10.10.10.100-199` | DHCP pool |
+
 ## Addressing rules
 
 - Fixed private addressing plan, never renumbered
