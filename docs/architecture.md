@@ -1,158 +1,74 @@
 # Architecture
 
-## Design Objectives
+## Design goals
 
-The homelab was designed to:
+- Run real services (private cloud, portfolio, client staging) on low-cost, low-power hardware
+- Keep a fixed addressing plan so static addresses and tunnel routes never break
+- Publish web apps **without opening inbound ports** (outbound Cloudflare Tunnel only)
+- Keep infrastructure roles separate (tunnel, network controller, apps, storage) to simplify recovery
+- Back every guest up to a machine that is **not** part of the cluster
 
-- Provide a practical environment for infrastructure administration
-- Separate services according to their role
-- Support both private and selected public services
-- Allow secure remote administration
-- Simplify backup and restoration
-- Provide hands-on experience with virtualization and containers
-- Limit direct Internet exposure
+## Physical layer
 
-## Proxmox Cluster
+| Device | Role |
+|---|---|
+| Node 1 (small-form-factor desktop, SSD) | Proxmox VE node |
+| Node 2 (small-form-factor desktop, HDD) | Proxmox VE node |
+| Backup server | Proxmox Backup Server |
+| Router | LAN gateway, DHCP, DNS |
+| Managed switch | Wired distribution |
 
-The virtualization layer consists of two Proxmox VE nodes.
+## Cluster layer
 
 ```text
-Proxmox Cluster
+Proxmox VE cluster (Corosync, 2 votes)
 ├── Node 1
-│   ├── Cloudflare Tunnel LXC
-│   ├── WireGuard VPN LXC
-│   └── Infrastructure workloads
+│   └── VM   Nextcloud
 └── Node 2
-    ├── Docker LXC
-    ├── Nextcloud LXC
-    └── Application workloads
+    ├── LXC  Docker host
+    ├── LXC  Tunnel connector
+    ├── LXC  Network controller
+    └── LXC  Client staging
+
+Proxmox Backup Server (outside the cluster)
 ```
 
-Workload placement can change depending on maintenance requirements and available resources.
+**Placement logic**
 
-## Workload Separation
+- Node 1 has the SSD and the stronger CPU → it gets the I/O-heavy Nextcloud VM.
+- Node 2 has the larger HDD → it gets the small, mostly idle LXC services.
+- Storage is local LVM-thin on each node; shared storage and HA are on the roadmap.
 
-### Docker Host
+## Why a VM for Nextcloud and LXC for the rest
 
-A dedicated Debian LXC container hosts containerized applications.
+| Choice | Reason |
+|---|---|
+| Nextcloud in a **KVM VM** | Own kernel, full isolation for personal data, QEMU guest agent for consistent snapshots, independent upgrades |
+| Services in **unprivileged LXC** | Minimal overhead on small CPUs |
+| Docker **inside** LXC | Keep Compose-based apps grouped and snapshot them as one unit |
 
-Responsibilities:
+## Data flows
 
-- Docker Engine
-- Docker Compose
-- React portfolio
-- UniFi Network Application
-- Additional web applications
-- Persistent Docker volumes
-
-### Cloudflare Connector
-
-A dedicated LXC container runs `cloudflared`.
-
-Responsibilities:
-
-- Establish outbound connections to Cloudflare
-- Route selected public hostnames to internal applications
-- Avoid exposing application ports directly on the router
-- Keep tunnel configuration separate from application containers
-
-### WireGuard Server
-
-A dedicated LXC container provides private remote access.
-
-Responsibilities:
-
-- Authenticate remote clients
-- Route authorized traffic to internal systems
-- Provide encrypted administration
-- Separate private access from public web access
-
-### Nextcloud Server
-
-Nextcloud runs inside a dedicated LXC container.
-
-Main components:
-
-- Apache
-- PHP
-- MariaDB
-- Redis
-- APCu
-- Nextcloud application
-- Persistent application data
-
-## Physical Infrastructure
-
-The physical environment includes:
-
-- Two virtualization hosts
-- One managed network switch
-- One Raspberry Pi
-- One ISP router
-- Ethernet connectivity
-- Local storage
-- External or secondary backup storage
-
-Exact models, capacities and serial numbers are intentionally excluded.
-
-## Data Flow
-
-### Public Application Flow
+### Public web
 
 ```text
-User
-  |
-  v
-Cloudflare
-  |
-  v
-Cloudflare Tunnel
-  |
-  v
-Authorized internal application
+Browser ──HTTPS──> Cloudflare edge ──(tunnel opened outbound)──> Tunnel connector ──> internal application
 ```
 
-### Private Administration Flow
+### Administration
 
 ```text
-Administrator
-  |
-  v
-WireGuard VPN
-  |
-  v
-Private management network
-  |
-  v
-Proxmox, Linux and application interfaces
+Admin workstation (private network only) ──> Proxmox / PBS web interfaces, SSH with keys
 ```
 
-### Internal User Flow
+### Backups
 
 ```text
-Local device
-  |
-  v
-Managed switch
-  |
-  v
-Internal service
+Node 1 / Node 2  ──vzdump (snapshot mode)──>  Proxmox Backup Server  (deduplicated)
 ```
 
-## Design Decisions
+## Design decisions and trade-offs
 
-### Dedicated Infrastructure Containers
-
-Security-related services such as the VPN server and tunnel connector are isolated from general workloads.
-
-### Limited Public Exposure
-
-Only selected web applications are published. Infrastructure-management interfaces remain private.
-
-### Documentation Placeholders
-
-All addressing values use documentation-only networks and generic hostnames.
-
-### Recovery-Oriented Design
-
-Applications, databases, configurations and virtualized workloads can be backed up independently.
+- **Two nodes** → simple and cheap; a quorum device is planned to tolerate one node failure.
+- **Backup server outside the cluster** → backups survive a cluster failure and can be restored to either node.
+- **Static addresses for every tunnel origin** → an address reset once broke the tunnel routes; never again.

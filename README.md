@@ -1,35 +1,29 @@
-# Proxmox Homelab Infrastructure
+# Proxmox Homelab — 2-node Proxmox VE cluster + Proxmox Backup Server
 
-![Proxmox](https://img.shields.io/badge/Proxmox-VE-E57000?logo=proxmox&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Containers-2496ED?logo=docker&logoColor=white)
-![Debian](https://img.shields.io/badge/Linux-Debian-A81D33?logo=debian&logoColor=white)
+![Proxmox VE](https://img.shields.io/badge/Proxmox_VE-9-E57000?logo=proxmox&logoColor=white)
+![PBS](https://img.shields.io/badge/Proxmox_Backup_Server-E57000?logo=proxmox&logoColor=white)
+![Debian](https://img.shields.io/badge/Debian-Linux-A81D33?logo=debian&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![Cloudflare](https://img.shields.io/badge/Cloudflare-Tunnel-F38020?logo=cloudflare&logoColor=white)
-![WireGuard](https://img.shields.io/badge/WireGuard-VPN-88171A?logo=wireguard&logoColor=white)
-![Nextcloud](https://img.shields.io/badge/Nextcloud-Self--Hosted-0082C9?logo=nextcloud&logoColor=white)
+![Nextcloud](https://img.shields.io/badge/Nextcloud-self--hosted-0082C9?logo=nextcloud&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## Overview
 
-This repository presents the architecture, services, security practices and technical decisions behind my personal homelab.
+This repository documents the homelab I built and operate: a **two-node Proxmox VE 9 cluster** backed up to a separate **Proxmox Backup Server**. It runs a private cloud (Nextcloud), my public portfolio, a network controller, a Docker application host and a staging environment for a client web application — all published through a **Cloudflare Tunnel**, with no inbound port opened on the router.
 
-The environment is built around a two-node Proxmox VE cluster hosting Linux containers, Docker workloads, private cloud services, secure remote-access services and network-management tools.
+What it demonstrates:
 
-The goal of this project is to demonstrate practical experience with:
+- Building and operating a Proxmox VE cluster (Corosync, quorum, LVM-thin storage)
+- **In-place major upgrade Proxmox VE 8 → 9** (Debian 12 → 13) on a running cluster
+- Proxmox Backup Server integration with scheduled, deduplicated backups
+- KVM virtual machines and unprivileged LXC containers
+- Docker / Docker Compose application hosting, multi-stage builds, Nginx
+- Zero-port-forwarding publication with Cloudflare Tunnel
+- Nextcloud administration and troubleshooting (PHP upgrade, database tuning, reverse-proxy trust)
+- Network redesign (Raspberry Pi NAT gateway → dedicated router) without changing the addressing plan
 
-- Server virtualization
-- Proxmox VE clustering
-- Linux system administration
-- LXC containers
-- Docker and Docker Compose
-- Network configuration and troubleshooting
-- VPN deployment
-- Reverse tunnels
-- Self-hosted applications
-- Infrastructure security
-- Backup planning
-- Technical documentation
-
-> **Privacy notice:** this repository contains sanitized examples only. Real IP addresses, domains, credentials, tokens, private keys, email addresses, hardware serial numbers and infrastructure identifiers are excluded or replaced with documentation placeholders.
+> **Privacy:** this is a public repository. Addresses, hostnames, domains, guest IDs, hardware identifiers, exact versions, ports, credentials and account names are intentionally omitted or replaced with generic labels. See [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -38,379 +32,88 @@ The goal of this project is to demonstrate practical experience with:
 ```mermaid
 flowchart TB
     Internet((Internet))
-    Router[ISP Router / Firewall]
-    Switch[Managed Network Switch]
-    Pi[Raspberry Pi<br/>Network Utility Services]
+    CF[Cloudflare edge]
+    GW[Router / gateway]
+    SW[Managed switch]
 
-    Internet --> Router
-    Router --> Switch
-    Switch --> Pi
+    GW --> SW
+    Internet --- CF
 
-    subgraph Cluster[Proxmox VE Cluster]
-        PVE1[Proxmox Node 1]
-        PVE2[Proxmox Node 2]
-
-        PVE1 <--> PVE2
-
-        subgraph InfraLXC[Infrastructure Containers]
-            CloudflareLXC[Cloudflare Tunnel LXC]
-            WireGuardLXC[WireGuard VPN LXC]
+    subgraph Cluster["Proxmox VE cluster (2 nodes)"]
+        direction LR
+        subgraph N1["Node 1 · SSD"]
+            NC["VM · Nextcloud"]
         end
-
-        subgraph AppLXC[Application Containers]
-            DockerHost[Docker Host LXC]
-            NextcloudLXC[Nextcloud LXC]
+        subgraph N2["Node 2 · HDD"]
+            DK["LXC · Docker host"]
+            TUN["LXC · Tunnel connector"]
+            NET["LXC · Network controller"]
+            STG["LXC · Client staging"]
         end
-
-        PVE1 --> CloudflareLXC
-        PVE1 --> WireGuardLXC
-        PVE2 --> DockerHost
-        PVE2 --> NextcloudLXC
     end
 
-    Switch --> PVE1
-    Switch --> PVE2
+    PBS[("Proxmox Backup Server")]
 
-    subgraph DockerServices[Docker Services]
-        Portfolio[React Portfolio]
-        UniFi[UniFi Network Application]
-        Additional[Additional Web Services]
-    end
+    SW --> N1
+    SW --> N2
+    SW --> PBS
 
-    DockerHost --> Portfolio
-    DockerHost --> UniFi
-    DockerHost --> Additional
-
-    CloudflareLXC --> Internet
-    WireGuardLXC --> Router
+    TUN -. "outbound tunnel" .-> CF
+    TUN --> NC
+    TUN --> DK
+    TUN --> STG
+    NET -. manages .-> SW
+    N1 & N2 -->|scheduled backups| PBS
 ```
 
 Detailed documentation:
 
-- [Architecture](docs/architecture.md)
-- [Infrastructure inventory](docs/infrastructure.md)
-- [Network architecture](docs/networking.md)
-- [Security model](docs/security.md)
-- [Services](docs/services.md)
-- [Backup strategy](docs/backup-strategy.md)
-- [Monitoring and maintenance](docs/monitoring.md)
-- [Challenges and lessons learned](docs/challenges.md)
-- [Future improvements](docs/future-improvements.md)
-
----
-
-## Infrastructure Summary
-
-| Component | Role | Technology |
-|---|---|---|
-| Proxmox Node 1 | Virtualization and infrastructure workloads | Proxmox VE |
-| Proxmox Node 2 | Virtualization and application workloads | Proxmox VE |
-| Docker Host | Containerized applications | Debian, Docker, Docker Compose |
-| Cloudflare Connector | Secure publication of selected web services | cloudflared |
-| WireGuard Server | Encrypted remote access | WireGuard |
-| Nextcloud Server | Private cloud platform | Apache, MariaDB, PHP, Redis |
-| Raspberry Pi | Network utility services | Raspberry Pi OS |
-| Managed Switch | Wired network connectivity | Managed Ethernet switch |
-| ISP Router | Internet gateway, NAT and firewall | ISP-provided router |
-
-All names and addresses shown in this repository are generic documentation examples.
-
----
-
-## Hosted Services
-
-### React Portfolio
-
-My personal portfolio is deployed as a containerized React application.
-
-Main technologies:
-
-- React
-- Node.js
-- Nginx
-- Docker
-- Docker Compose
-- Cloudflare Tunnel
-
-The application is built in a Node.js container and served by Nginx using a lightweight production image.
-
-### Nextcloud
-
-Nextcloud provides private file synchronization and remote access to personal documents.
-
-Main components:
-
-- Debian Linux
-- Apache
-- MariaDB
-- PHP
-- Redis
-- APCu
-- Cloudflare Tunnel
-
-The service runs in a dedicated LXC container to isolate the application, database and data storage from other workloads.
-
-### UniFi Network Application
-
-The UniFi Network Application provides centralized management and visibility for supported network equipment.
-
-It is deployed as a Docker service on the dedicated Docker host.
-
-### Cloudflare Tunnel
-
-A dedicated Linux container runs the Cloudflare connector.
-
-This allows selected web services to be published without directly exposing their internal HTTP ports through the router.
-
-### WireGuard VPN
-
-WireGuard provides encrypted remote access to the private management network.
-
-The VPN runs in a dedicated LXC container and remains separated from public-facing web applications.
-
----
-
-## Network Design
-
-The homelab uses a private RFC1918 network.
-
-Documentation examples use the following reserved documentation networks:
-
-```text
-Local documentation network: 192.0.2.0/24
-VPN documentation network:   198.51.100.0/24
-Public documentation address: 203.0.113.10
-Example domain:               homelab.example.com
-```
-
-These values do **not** represent the real production environment.
-
-Example logical addressing:
-
-| System | Documentation address |
+| Topic | File |
 |---|---|
-| Gateway | `192.0.2.1` |
-| Proxmox Node 1 | `192.0.2.10` |
-| Proxmox Node 2 | `192.0.2.11` |
-| Docker Host | `192.0.2.20` |
-| Cloudflare Connector | `192.0.2.21` |
-| WireGuard Server | `192.0.2.22` |
-| Nextcloud Server | `192.0.2.23` |
-| Raspberry Pi | `192.0.2.30` |
-
-See [networking.md](docs/networking.md) for more details.
-
----
-
-## Security Approach
-
-The environment follows several security principles:
-
-- Separation of services into dedicated containers
-- No credentials stored in Git
-- No private keys committed to the repository
-- VPN access for private administration
-- Cloudflare Tunnel for selected public applications
-- Minimal router port forwarding
-- Regular Linux package updates
-- Reduced attack surface
-- Container isolation
-- Sanitized infrastructure documentation
-- Backup verification
-- Environment variables for application secrets
-- Example configurations instead of production configurations
-
-More details: [security.md](docs/security.md).
+| Design and data flows | [docs/architecture.md](docs/architecture.md) |
+| Nodes and workloads | [docs/infrastructure.md](docs/infrastructure.md) |
+| Network design | [docs/networking.md](docs/networking.md) |
+| What runs where | [docs/services.md](docs/services.md) |
+| Backups and snapshots | [docs/backup-strategy.md](docs/backup-strategy.md) |
+| Health checks | [docs/monitoring.md](docs/monitoring.md) |
+| Security model | [docs/security.md](docs/security.md) |
+| Incidents and fixes | [docs/challenges.md](docs/challenges.md) |
+| Roadmap | [docs/future-improvements.md](docs/future-improvements.md) |
 
 ---
 
-## Service Isolation
+## At a glance
 
-```text
-Public web access
-        |
-        v
-Cloudflare connector
-        |
-        v
-Selected internal applications
+| | Node 1 | Node 2 | Backup server |
+|---|---|---|---|
+| Hardware | Small-form-factor desktop | Small-form-factor desktop | Separate machine |
+| RAM | 16 GB | 16 GB | — |
+| Disk | 1 TB SSD | 1 TB HDD | Dedicated datastore |
+| Software | Proxmox VE 9 | Proxmox VE 9 | Proxmox Backup Server |
+| Role | Storage-heavy VM | Lightweight LXC services | Backup target |
 
-Remote administration
-        |
-        v
-WireGuard VPN
-        |
-        v
-Private management network
-
-Containerized applications
-        |
-        v
-Dedicated Docker LXC
-
-Private cloud
-        |
-        v
-Dedicated Nextcloud LXC
-```
-
-This design limits dependencies between services and makes troubleshooting, maintenance and recovery easier.
+| Workload | Type | Node | Role |
+|---|---|---|---|
+| Nextcloud | KVM VM | Node 1 | Private cloud |
+| Docker host | Unprivileged LXC | Node 2 | Portfolio, invoicing app, Portainer |
+| Tunnel connector | Unprivileged LXC | Node 2 | Cloudflare Tunnel |
+| Network controller | LXC | Node 2 | UniFi OS Server |
+| Client staging | Unprivileged LXC | Node 2 | Next.js + PostgreSQL + Caddy |
 
 ---
 
-## Docker Deployment Model
+## Highlights
 
-Docker Compose is used to define multi-container services.
-
-Production files containing credentials are not included. Only sanitized templates are stored in this repository:
-
-```text
-examples/
-├── docker-compose.example.yml
-└── environment.example
-```
-
-Example deployment workflow:
-
-```bash
-cp examples/environment.example .env
-cp examples/docker-compose.example.yml docker-compose.yml
-
-docker compose config
-docker compose up -d
-docker compose ps
-```
+- **Proxmox VE 8 → 9 upgrade** on both nodes after a full `pve8to9` pre-check, one node at a time, keeping quorum.
+- **Proxmox Backup Server** on a dedicated machine outside the cluster: scheduled snapshot-mode backups of every guest, deduplicated, with e-mail notifications, plus manual backups before risky changes.
+- **No inbound port forwarding**: a single lightweight connector container publishes all public sites.
+- **Nextcloud on a full VM** and hardened: PHP upgrade, database update and missing indices, Redis + APCu caching, trusted reverse proxy, clean health checks — with a VM snapshot taken first.
+- **Client staging on Proxmox**: a Dockerized Next.js / PostgreSQL / Caddy stack, released with a scripted maintenance window, database dump and image tag for instant rollback, and boot priority after a power cut.
+- **Network redesign**: the Raspberry Pi that shared Wi-Fi to Ethernet (NetworkManager + nftables NAT) was replaced by a dedicated router while keeping the same addressing plan, so no service broke.
 
 ---
 
-## Backup Strategy
-
-The backup strategy is designed around multiple recovery levels:
-
-1. Proxmox container and virtual-machine backups
-2. Application-level backups
-3. Database exports
-4. Configuration backups
-5. External copies of critical data
-6. Periodic restoration testing
-
-More details: [backup-strategy.md](docs/backup-strategy.md).
-
----
-
-## Monitoring and Maintenance
-
-The environment is maintained through:
-
-- Proxmox resource monitoring
-- Docker container status checks
-- Linux service status checks
-- Application logs
-- Storage-capacity monitoring
-- Tunnel connector status monitoring
-- VPN connectivity verification
-- Operating-system updates
-- Application updates
-- Recovery testing
-
-Generic commands:
-
-```bash
-systemctl --failed
-systemctl status SERVICE_NAME
-
-docker compose ps
-docker compose logs --tail=100
-
-df -h
-free -h
-uptime
-```
-
----
-
-## Troubleshooting Experience
-
-Building this homelab included troubleshooting:
-
-- Static address changes affecting internal services
-- Cloudflare connector stability
-- HTTP protocol configuration
-- Docker application redeployment
-- Browser and proxy caching
-- Nextcloud reverse-proxy configuration
-- WebDAV connectivity
-- VPN routing and NAT
-- Linux service startup
-- Network forwarding
-- Container startup ordering
-- Raspberry Pi network sharing
-- Remote application accessibility
-- Service separation and resource planning
-
-See [challenges.md](docs/challenges.md).
-
----
-
-## Skills Demonstrated
-
-### Virtualization
-
-- Proxmox VE administration
-- Two-node cluster management
-- LXC deployment
-- Resource allocation
-- Container startup configuration
-- Virtual networking
-- Service migration
-
-### Linux Administration
-
-- Debian administration
-- Package management
-- systemd services
-- Network troubleshooting
-- Permissions
-- Web-server configuration
-- Log analysis
-- Shell scripting
-
-### Containers
-
-- Docker
-- Docker Compose
-- Multi-stage images
-- Nginx
-- Container networking
-- Persistent volumes
-- Environment variables
-- Service lifecycle management
-
-### Networking
-
-- TCP/IP
-- Private addressing
-- NAT
-- Port forwarding
-- DNS
-- Reverse tunnels
-- VPN routing
-- Managed switching
-- Remote access
-
-### Security
-
-- Service isolation
-- Secrets management
-- Reduced attack surface
-- VPN-based administration
-- Secure tunnelling
-- Configuration sanitization
-- Backup planning
-
----
-
-## Repository Structure
+## Repository structure
 
 ```text
 .
@@ -418,90 +121,21 @@ See [challenges.md](docs/challenges.md).
 ├── SECURITY.md
 ├── LICENSE
 ├── .gitignore
-├── docs/
-│   ├── architecture.md
-│   ├── infrastructure.md
-│   ├── networking.md
-│   ├── security.md
-│   ├── services.md
-│   ├── backup-strategy.md
-│   ├── monitoring.md
-│   ├── challenges.md
-│   └── future-improvements.md
-├── diagrams/
-│   ├── architecture-diagram.md
-│   └── network-diagram.md
-├── examples/
-│   ├── docker-compose.example.yml
-│   ├── cloudflared-config.example.yml
-│   ├── wireguard-server.example.conf
-│   ├── wireguard-client.example.conf
-│   └── environment.example
-├── screenshots/
-│   └── README.md
-└── scripts/
-    ├── update-containers.example.sh
-    ├── service-health-check.example.sh
-    └── backup-example.sh
+├── docs/          # architecture, workloads, network, services, backups, monitoring, security, incidents, roadmap
+├── diagrams/      # Mermaid diagrams
+├── examples/      # sanitized config templates (placeholders only)
+├── scripts/       # generic helper scripts
+└── screenshots/   # sanitized screenshots only
 ```
-
----
-
-## Planned Improvements
-
-Future improvements may include:
-
-- Dedicated backup server
-- Centralized monitoring
-- Automated health checks
-- Centralized log management
-- Network segmentation
-- Additional firewall rules
-- Infrastructure-as-code templates
-- Automated configuration validation
-- UPS integration
-- Disaster-recovery documentation
-- High-availability testing
-
----
-
-## Privacy Notice
-
-The following information has intentionally been removed or replaced:
-
-- Real IP addresses
-- Public IP addresses
-- MAC addresses
-- Domain names
-- Email addresses
-- Usernames
-- Passwords
-- API keys
-- Tunnel tokens
-- VPN keys
-- SSH keys
-- Container identifiers
-- Hardware serial numbers
-- Router configuration
-- Firewall source addresses
-- Backup destinations
-- Personal files
-- Application data
 
 ---
 
 ## Author
 
-**Yacine Zakat**
+**Yacine Zakat** — IT Support and Application Support Technician (Microsoft 365, Windows, Linux, virtualization, Docker, networking, self-hosting).
 
-IT Support and Application Support Technician with experience in Microsoft 365, Windows and Linux environments, virtualization, Docker, networking and self-hosted services.
-
-This homelab is used for continuous learning, experimentation and practical infrastructure administration.
-
----
+This homelab is my hands-on environment: it hosts my own services and a real client project, so it has to stay up, be backed up and be recoverable.
 
 ## Disclaimer
 
-This repository is provided for demonstration and educational purposes.
-
-All configurations are sanitized examples and must be reviewed before use in another environment.
+Configuration files in `examples/` are sanitized templates and must be reviewed before use elsewhere.

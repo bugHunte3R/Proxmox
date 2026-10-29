@@ -1,62 +1,68 @@
 # Services
 
-## Service Inventory
+## Inventory
 
-| Service | Platform | Access Type | Purpose |
-|---|---|---|---|
-| Proxmox VE | Physical hosts | Private | Virtualization management |
-| Docker | LXC | Private | Containerized applications |
-| Portfolio | Docker | Public | Professional portfolio |
-| UniFi Network Application | Docker | Private | Network management |
-| Nextcloud | LXC | Selected public access | Private cloud |
-| Cloudflare Tunnel | LXC | Outbound connector | Secure application publishing |
-| WireGuard | LXC | VPN | Remote administration |
-| Raspberry Pi Services | Physical device | Private | Network utilities |
-
-## Portfolio
-
-The portfolio is a React application deployed using Docker.
-
-```text
-Source code
-   |
-   v
-Node.js build stage
-   |
-   v
-Static production files
-   |
-   v
-Nginx container
-   |
-   v
-Cloudflare Tunnel
-```
+| Service | Where | Access |
+|---|---|---|
+| Nextcloud | VM on Node 1 | Public via tunnel |
+| React portfolio | Docker host | Public via tunnel |
+| Portfolio e-mail API (Node.js) | Docker host, systemd service | Internal, proxied by the portfolio's Nginx |
+| InvoiceShelf + PostgreSQL | Docker host, Docker Compose | Private |
+| Portainer CE | Docker host | Private |
+| Cloudflare connector | Dedicated LXC | Outbound only |
+| UniFi OS Server | Dedicated LXC | Private |
+| Client staging (Next.js + PostgreSQL + Caddy) | Dedicated LXC, Docker Compose | Public via tunnel |
+| Proxmox Backup Server | Dedicated machine | Private |
 
 ## Nextcloud
 
 ```text
-Nextcloud
-├── Apache
-├── PHP
+Debian
+├── Apache + mod_php
 ├── MariaDB
-├── Redis
-├── APCu
-└── Persistent data
+├── Redis (file locking + cache) and APCu (local cache)
+├── Nextcloud data on a dedicated virtual disk
+└── qemu-guest-agent
 ```
 
-## UniFi Network Application
+Administration is done from the Proxmox node through the guest agent; long jobs run through `systemd-run` so they survive an agent restart.
 
-The UniFi application runs in Docker and manages compatible network equipment.
+## Docker host
 
-Its administrative interface is kept private.
+Portfolio build:
 
-## Cloudflare Tunnel
+```text
+React source ──> Node.js build stage (npm install, npm run build)
+             ──> Nginx serves the static build, SPA fallback, /api/ → Node e-mail API
+             ──> Cloudflare Tunnel
+```
 
-The connector establishes outbound connections. Production tunnel credentials and ingress rules are excluded.
+Other Compose projects tested on this host and kept for later: Actual Budget, Firefly III, Nginx Proxy Manager, Prometheus + Grafana + Proxmox exporter, and a Telegram job-alert bot.
 
-## WireGuard
+## Cloudflare connector
 
-WireGuard provides encrypted remote access to private systems.
+Native package + systemd unit (not Docker), HTTP/2 transport, remotely managed tunnel. The token is never stored in this repository.
 
-Only placeholder configurations are included in this repository.
+## UniFi OS Server
+
+Deployed in an LXC with a Proxmox helper script. Previously tested on the Raspberry Pi, moved to Proxmox so it is backed up with everything else.
+
+## Client staging
+
+A freelance project: a marketplace web application tested by the client on my infrastructure.
+
+```text
+Ubuntu LXC
+└── Docker Compose
+    ├── app    Next.js standalone build
+    ├── db     PostgreSQL
+    └── caddy  reverse proxy
+```
+
+Release procedure (scripted):
+
+1. Code shipped as a `git bundle` — the server holds no Git credentials.
+2. Application backup: database dump, uploads archive, current version, image tagged for instant rollback.
+3. New image built while the old version keeps serving.
+4. Short maintenance page during database migrations and container swap.
+5. Health checks, then the site reopens.

@@ -1,56 +1,44 @@
-# Infrastructure Inventory
+# Infrastructure
 
-## Virtualization Hosts
+## Proxmox VE nodes
 
-| Name | Role | Operating System | Documentation Hostname |
-|---|---|---|---|
-| Node 1 | Proxmox cluster node | Proxmox VE | `pve-node-01` |
-| Node 2 | Proxmox cluster node | Proxmox VE | `pve-node-02` |
+| | Node 1 | Node 2 |
+|---|---|---|
+| Hardware | Small-form-factor desktop | Small-form-factor desktop |
+| RAM | 16 GB | 16 GB |
+| Disk | 1 TB SSD | 1 TB HDD |
+| OS | Proxmox VE 9 (Debian 13) | Proxmox VE 9 (Debian 13) |
+| Network | One NIC bridged into a Linux bridge | One NIC bridged into a Linux bridge |
+| Time | chrony, synchronized | chrony, synchronized |
 
-## Virtual Workloads
+## Cluster
 
-| Name | Type | Role | Operating System |
-|---|---|---|---|
-| Docker Host | LXC | Docker application platform | Debian |
-| Tunnel Connector | LXC | Cloudflare Tunnel | Debian |
-| VPN Gateway | LXC | WireGuard VPN | Debian |
-| Private Cloud | LXC | Nextcloud | Debian |
-
-## Network Equipment
-
-| Component | Role |
+| Item | Value |
 |---|---|
-| ISP Router | Internet gateway, NAT and firewall |
-| Managed Switch | Wired connectivity and network distribution |
-| Raspberry Pi | Network utility services |
-| Ethernet Links | Physical connectivity between hosts and switch |
+| Members | 2 nodes |
+| Transport | Corosync (knet) on the LAN |
+| Storage | Local + LVM-thin per node, Proxmox Backup Server shared by both |
 
-## Applications
+## Proxmox Backup Server
 
-| Application | Deployment |
+Standalone machine, not a cluster member, with a dedicated deduplicated datastore used by both nodes.
+
+## Workloads
+
+| Workload | Type | Node | Sizing | Notes |
+|---|---|---|---|---|
+| Nextcloud | KVM VM | Node 1 | 2 vCPU, 12 GB RAM, large data disk | QEMU guest agent, starts on boot |
+| Docker host | Unprivileged LXC, nesting | Node 2 | 1 vCPU, 3 GB RAM | Static address |
+| Tunnel connector | Unprivileged LXC | Node 2 | 1 vCPU, 512 MB RAM | Static address |
+| Network controller | LXC, nesting | Node 2 | 2 vCPU, 4 GB RAM | UniFi OS Server |
+| Client staging | Unprivileged LXC, nesting | Node 2 | 2 vCPU, 4 GB RAM | Static address, first to boot |
+
+Earlier workloads (a WireGuard VPN container, a first Nextcloud container, test VMs) were retired; their last backups are kept on the backup server.
+
+## Network equipment
+
+| Device | Role |
 |---|---|
-| React Portfolio | Docker |
-| UniFi Network Application | Docker |
-| Nextcloud | Dedicated LXC |
-| Cloudflare Connector | Dedicated LXC |
-| WireGuard | Dedicated LXC |
-
-## Resource Planning Principles
-
-- Infrastructure services receive predictable resources
-- Application containers can be adjusted independently
-- Storage-intensive services remain isolated
-- Network services are kept lightweight
-- Backup planning is considered before expanding a workload
-
-## Information Intentionally Excluded
-
-- Hardware serial numbers
-- MAC addresses
-- Exact CPU and storage identifiers
-- Public IP addresses
-- Internal production addresses
-- Proxmox fingerprints
-- Container IDs
-- Router identifiers
-- Backup target addresses
+| Router | Gateway, DHCP, DNS |
+| Managed switch | Wired distribution |
+| Raspberry Pi | Former gateway (NetworkManager sharing + nftables NAT), replaced by the router |

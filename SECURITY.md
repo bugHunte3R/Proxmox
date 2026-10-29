@@ -1,35 +1,18 @@
 # Security Policy
 
-## Public Repository
+## Scope
 
-This repository contains documentation and sanitized configuration examples only.
+This repository documents a real homelab using generic labels only. It contains documentation and sanitized configuration templates — never production configuration.
 
-It does not contain the real production configuration of the homelab.
+## Never published here
 
-## Reporting a Problem
+- Public or private IP addresses, hostnames, domains, guest IDs
+- Exact software versions, open ports, hardware models or serial numbers, MAC addresses
+- Account names and e-mail addresses
+- Passwords, API keys, access or tunnel tokens
+- Private keys (SSH, WireGuard, TLS) and VPN client profiles
+- Router / firewall exports, database dumps, backups, personal data
 
-If sensitive information is accidentally exposed, open an issue without reproducing the sensitive value.
+## Reporting
 
-## Information That Must Not Be Published
-
-- Passwords
-- Private keys
-- API keys
-- Access tokens
-- Tunnel tokens
-- VPN client configurations
-- Public IP addresses
-- Internal production addresses
-- Personal domains
-- Personal email addresses
-- Router exports
-- Firewall exports
-- Backup credentials
-- Database dumps
-- Application data
-- Authentication cookies
-- Hardware serial numbers
-
-## Configuration Examples
-
-All addresses, domains, identifiers and credentials are placeholders.
+If you find sensitive information in this repository, open an issue **without** reproducing the value.

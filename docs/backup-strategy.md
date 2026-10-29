@@ -1,55 +1,33 @@
 # Backup Strategy
 
-## Objectives
+## Layers in place
 
-Protect:
+| Layer | Tool | Scope |
+|---|---|---|
+| 1. Guest backups | vzdump → Proxmox Backup Server | every VM and container |
+| 2. Snapshots before changes | `qm snapshot` / `pct snapshot` | the guest being changed |
+| 3. Application backups | database dump, uploads archive, tagged Docker image | client staging |
+| 4. Off-box copies | copy of application backups to a workstation | client staging |
 
-- Proxmox workloads
-- Application configurations
-- Databases
-- Docker persistent data
-- Nextcloud data
-- Infrastructure documentation
-- Recovery instructions
+## Proxmox Backup Server
 
-## Backup Layers
+- Dedicated machine outside the cluster, shared by both nodes
+- Deduplicated chunk store: several full backups of a large Nextcloud disk fit in a fraction of its size
+- Scheduled job for all guests, snapshot mode (no downtime), retention policy, e-mail notification
+- Manual backups before risky work
 
-### Layer 1: Proxmox Backups
+## Snapshots as rollback points
 
-Periodic backups of important LXC containers and virtual machines.
+A snapshot is taken before every upgrade or configuration change (e.g. before the Nextcloud PHP/database work, before each staging release). Rollback is one command. Snapshots are deleted once the change is validated — they are not backups.
 
-### Layer 2: Application Backups
+## Recovery priorities
 
-Application-specific backups of configuration files and persistent volumes.
+1. Tunnel connector — restores all public access
+2. Nextcloud — personal data
+3. Client staging
+4. Docker host
+5. Network controller
 
-### Layer 3: Database Backups
+## Lesson learned
 
-Database dumps created separately from filesystem backups.
-
-### Layer 4: External Copies
-
-Critical backups are copied to another location or storage system.
-
-### Layer 5: Restoration Testing
-
-A backup is not considered reliable until restoration has been tested.
-
-## Suggested Recovery Priorities
-
-1. Network access services
-2. Authentication and management services
-3. Databases
-4. Critical applications
-5. User data
-6. Non-critical applications
-
-## Information Excluded
-
-This repository does not contain:
-
-- Backup server addresses
-- Storage mount paths
-- Access credentials
-- Encryption keys
-- Remote storage tokens
-- Personal data
+A scheduled job only runs if the node is powered on at that moment; missed runs are not caught up by default. Backup jobs are now checked after any outage, and `repeat-missed` / more frequent schedules are part of the roadmap.

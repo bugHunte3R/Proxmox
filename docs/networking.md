@@ -1,102 +1,49 @@
-# Network Architecture
+# Network
 
-## Overview
-
-The homelab uses a private local network behind an ISP router.
-
-The public documentation uses addresses reserved for examples.
-
-## Documentation Addressing
-
-| Network | Example Range |
-|---|---|
-| Local network | `192.0.2.0/24` |
-| VPN network | `198.51.100.0/24` |
-| Public example network | `203.0.113.0/24` |
-
-These values do not represent the real production environment.
-
-## Logical Network
+## Topology
 
 ```mermaid
 flowchart LR
-    Internet((Internet))
-    Gateway[Router / Firewall]
-    Switch[Managed Switch]
-    Cluster[Proxmox Cluster]
-    Pi[Raspberry Pi]
-    Devices[Local Devices]
-
-    Internet --> Gateway
-    Gateway --> Switch
-    Switch --> Cluster
-    Switch --> Pi
-    Switch --> Devices
+    Up[Internet uplink] --> GW[Router / gateway]
+    GW --> SW[Managed switch]
+    SW --> N1[Node 1]
+    SW --> N2[Node 2]
+    SW --> PBS[Backup server]
+    SW --> Clients[LAN clients]
 ```
 
-## Remote Access
+The LAN is a single private network. Each node has one physical NIC attached to a Linux bridge; every guest is bridged on it.
 
-### Cloudflare Tunnel
+## Addressing rules
 
-Used for selected HTTP and HTTPS applications.
+- Fixed private addressing plan, never renumbered
+- **Every tunnel origin and the backup server get a static address**
+- Other devices use DHCP from the router
 
-```text
-Internet client
-      |
-      v
-Cloudflare network
-      |
-      v
-Outbound tunnel connector
-      |
-      v
-Authorized internal application
-```
+## Gateway history
 
-### WireGuard
+| Period | Gateway | How |
+|---|---|---|
+| Before | Raspberry Pi | Wi-Fi uplink shared to Ethernet with NetworkManager + nftables NAT, plus a custom systemd unit forwarding VPN traffic |
+| Now | Dedicated router | Same gateway address kept |
 
-Used for private administrative access.
+Keeping the same gateway address meant no node or guest configuration had to change during the swap.
 
-```text
-Remote administrator
-      |
-      v
-Encrypted WireGuard tunnel
-      |
-      v
-Private management network
-```
+## Public exposure — Cloudflare Tunnel
 
-## Security Boundaries
+There is no port forwarding. A dedicated container runs `cloudflared` as a systemd service (remotely managed tunnel, HTTP/2 transport, auto-update disabled). Each public hostname maps to one internal application.
 
-The following interfaces remain private:
+TLS terminates at Cloudflare; Nextcloud is configured to trust the connector as a reverse proxy so client addresses and HTTPS are detected correctly.
 
-- Proxmox web interface
-- SSH management interfaces
-- Docker administration
-- UniFi administration
-- Database ports
-- Nextcloud database
-- Internal dashboards
-- Backup services
+## Administration
 
-## DNS
+Management interfaces (Proxmox, PBS, Portainer, network controller, SSH) are reachable from the private network only. SSH uses keys.
 
-Public DNS is used only for services intentionally published through a secure tunnel.
+## Troubleshooting checklist I use
 
-Internal services use private addresses that are not included in this repository.
-
-## Router Configuration
-
-Router screenshots, firewall exports, real external addresses and exact forwarding rules are excluded.
-
-## Network Troubleshooting Checklist
-
-1. Confirm link state
-2. Confirm interface address
-3. Confirm default route
-4. Confirm DNS resolution
-5. Confirm local application availability
-6. Confirm firewall forwarding
-7. Confirm NAT rules
-8. Confirm remote service reachability
+1. `ip -br a` / `ip route` on the node and inside the guest
+2. Ping the gateway and an Internet host
+3. `ss -lntup` inside the guest — is the origin port listening?
+4. `curl -I` the origin from the connector container
+5. `journalctl -u cloudflared` — origin errors vs. edge connection errors
+6. Only then look at the Cloudflare dashboard

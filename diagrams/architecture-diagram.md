@@ -2,29 +2,27 @@
 
 ```mermaid
 flowchart TB
-    Internet((Internet))
-    Router[Router / Firewall]
-    Switch[Managed Switch]
+    CF[Cloudflare edge]
 
-    Internet --> Router
-    Router --> Switch
-
-    subgraph Cluster[Proxmox VE Cluster]
-        PVE1[Node 1]
-        PVE2[Node 2]
-        PVE1 <--> PVE2
-
-        CF[Cloudflare Tunnel LXC]
-        WG[WireGuard LXC]
-        DK[Docker Host LXC]
-        NC[Nextcloud LXC]
-
-        PVE1 --> CF
-        PVE1 --> WG
-        PVE2 --> DK
-        PVE2 --> NC
+    subgraph Cluster["Proxmox VE cluster · 2 nodes"]
+        subgraph N1["Node 1 · SSD"]
+            NC["VM · Nextcloud"]
+        end
+        subgraph N2["Node 2 · HDD"]
+            DK["LXC · Docker host<br/>portfolio · invoicing · Portainer"]
+            TUN["LXC · Tunnel connector"]
+            NET["LXC · Network controller"]
+            STG["LXC · Client staging<br/>Next.js · PostgreSQL · Caddy"]
+        end
+        N1 <-->|Corosync| N2
     end
 
-    Switch --> PVE1
-    Switch --> PVE2
+    PBS[("Proxmox Backup Server")]
+
+    TUN -. outbound tunnel .-> CF
+    TUN --> NC
+    TUN --> DK
+    TUN --> STG
+    N1 -->|vzdump| PBS
+    N2 -->|vzdump| PBS
 ```

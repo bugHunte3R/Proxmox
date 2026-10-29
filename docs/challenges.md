@@ -1,80 +1,64 @@
-# Challenges and Lessons Learned
+# Incidents and Lessons Learned
 
-## Network Address Changes
+## 1. Guest address reset broke the tunnel
 
-Changing internal addresses can affect:
+Container addresses changed; Cloudflare routes still pointed to the old ones and the public sites went down.
 
-- Reverse-tunnel routes
-- Docker services
-- DNS records
-- Trusted-host settings
-- VPN routes
-- Monitoring targets
+**Fix:** static addresses re-applied, tunnel origins checked one by one.
+**Lesson:** every tunnel origin gets a static address and is documented privately.
 
-**Lesson learned:** maintain an addressing plan and validate dependencies before making network changes.
+## 2. Cloudflare Error 1033 / unstable connector
 
-## Cloudflare Connector Stability
+The private cloud returned Cloudflare error 1033 (tunnel not reachable).
 
-Troubleshooting required reviewing:
+**Fix:** forced HTTP/2 transport in the systemd unit, reduced the number of published services.
+**Lesson:** troubleshoot the connector (edge side) and the origin (LAN side) separately.
 
-- Connector service status
-- Transport protocol
-- Network availability
-- systemd restart policy
-- Connector redundancy
-- Local application availability
+## 3. Proxmox VE 8 → 9 major upgrade
 
-**Lesson learned:** troubleshoot the local application and the connector separately.
+Ran `pve8to9 --full` first, then upgraded both nodes to PVE 9 / Debian 13, one node at a time.
 
-## Docker Deployments
+**Lesson:** keep quorum during the upgrade, keep the previous kernel as a boot fallback, and re-check scheduled jobs afterwards.
 
-Changes may remain invisible because of:
+## 4. Nextcloud health warnings
 
-- Browser cache
-- Proxy cache
-- Old container images
-- Incorrect build context
-- Incorrect file names
-- Containers not recreated after a build
+Admin overview showed missing database indices, an old PHP version, wrong reverse-proxy detection and noisy logs; the enterprise repository blocked `apt` on the node.
 
-**Lesson learned:** validate source files, build output, running images and external cache independently.
+**Fix, after a VM snapshot:** no-subscription repository, missing indices added, APCu for CLI, trusted proxy, log level tuned, system and database updates, PHP upgrade (old version kept for rollback), integrity check fixed. Health checks are now clean.
+**Lesson:** "the site loads" is not "the app is healthy".
 
-## Nextcloud Reverse Proxy
+## 5. `php: command not found` when running `occ`
 
-Reverse-proxy deployment required attention to:
+The command was run in the wrong container.
+**Lesson:** confirm the host first (`hostnamectl`, `ip -br a`).
 
-- Trusted domains
-- Trusted proxies
-- HTTPS overwrite settings
-- Forwarded headers
-- WebDAV
-- PHP modules
-- Background jobs
-- File permissions
+## 6. Long jobs killed inside the VM
 
-**Lesson learned:** application availability does not guarantee full feature correctness.
+Upgrading `qemu-guest-agent` killed commands started through it.
+**Fix:** run long jobs with `systemd-run` inside the VM.
 
-## WireGuard Routing
+## 7. Raspberry Pi as a gateway
 
-VPN connectivity required validating:
+The Pi shared Wi-Fi to Ethernet with NetworkManager + nftables NAT. It worked, but every change risked cutting access to the cluster.
+**Fix:** replaced by a dedicated router keeping the same gateway address.
 
-- Handshake status
-- UDP forwarding
-- NAT
-- Kernel IP forwarding
-- Firewall forwarding rules
-- Allowed IPs
-- DNS
-- Client routes
+## 8. Slow start after a power cut
 
-**Lesson learned:** a successful handshake confirms authentication, not complete routing.
+Guests start sequentially; the most important site came back several minutes after power-on.
+**Fix:** boot order set so it starts first; containers use `restart: unless-stopped`.
 
-## Service Isolation
+## 9. Disk pressure on the staging container
 
-Dedicated containers consume extra resources but provide:
+Each release build left several GB of Docker build cache.
+**Fix:** periodic `docker builder prune` and removal of old rollback images after validation.
 
-- Easier troubleshooting
-- Clear responsibilities
-- Reduced dependency conflicts
-- Better backup granularity
-- Stronger security boundaries
+## 10. Missed scheduled backups
+
+A monthly backup job did not run because the nodes were powered off at the scheduled time.
+**Fix:** manual backup run, schedule review.
+**Lesson:** verify backup tasks after every outage, not only the job definition.
+
+## 11. VPN: handshake ≠ routing
+
+A successful WireGuard handshake did not mean traffic reached the LAN — NAT/forwarding and `AllowedIPs` also had to be right.
+**Lesson:** test handshake, then routing, then DNS, separately.

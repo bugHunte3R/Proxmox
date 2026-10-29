@@ -1,82 +1,24 @@
 # Security
 
-## Security Principles
+## Model
 
-1. Do not expose management interfaces publicly.
-2. Use VPN access for private administration.
-3. Publish only selected applications.
-4. Separate infrastructure services.
-5. Store secrets outside version control.
-6. Keep operating systems and applications updated.
-7. Back up critical data.
-8. Review failed services and logs.
-9. Apply least privilege where possible.
-10. Sanitize all public documentation.
+1. **No inbound ports.** Public apps are reached only through an outbound Cloudflare Tunnel.
+2. **Admin interfaces are private-network only**, SSH by key.
+3. **Role separation**: tunnel, network controller, Docker apps, client staging and Nextcloud are separate guests.
+4. **Unprivileged LXC** wherever privileges are not needed.
+5. **Nextcloud in a VM** — its own kernel and disk for personal data.
+6. **Least privilege**: day-to-day administration with a non-root account, elevated rights granted temporarily.
+7. **Secrets stay on the machines** in protected files — never in Git.
+8. **Snapshot + backup before every change.**
+9. **Staging hardening**: no indexing, HSTS, CSP, rate-limited sign-in, no Git credentials on the server.
 
-## Secret Management
+## Public documentation rules
 
-Secrets should be stored in local environment files or protected configuration files.
+This repository never contains: addresses (public or private), hostnames, domains, guest IDs, exact software versions, open ports, hardware identifiers, account names, e-mail addresses, credentials, tokens, keys, VPN profiles, router/firewall exports or personal data.
 
-Examples:
+## If a secret leaks
 
-```text
-.env
-*.key
-*.pem
-credentials.json
-config-production.yml
-```
-
-These files must never be committed.
-
-## Sensitive Information
-
-The following information must not appear in the public repository:
-
-- Passwords
-- API keys
-- Authentication tokens
-- Cloudflare tunnel tokens
-- Tunnel credential JSON files
-- WireGuard private keys
-- SSH private keys
-- Database credentials
-- SMTP credentials
-- Real public addresses
-- Real internal addresses
-- Real domains
-- Email addresses
-- MAC addresses
-- Backup credentials
-- Session cookies
-- QR codes containing VPN configurations
-
-## Public Screenshots
-
-Before publishing a screenshot:
-
-- Hide IP addresses
-- Hide hostnames that identify the environment
-- Hide usernames
-- Hide domains
-- Hide email addresses
-- Hide MAC addresses
-- Hide serial numbers
-- Hide storage identifiers
-- Hide tunnel identifiers
-- Hide QR codes
-- Hide browser tabs containing private information
-- Hide notifications
-- Remove image metadata
-
-## Incident Response
-
-If a secret is accidentally committed:
-
-1. Revoke or rotate the secret immediately.
-2. Replace the exposed credential.
-3. Remove it from current files.
-4. Remove it from Git history.
-5. Review service logs.
-6. Confirm that no unauthorized access occurred.
-7. Add the sensitive pattern to `.gitignore`.
+1. Revoke / rotate it immediately
+2. Remove it from the files **and** from Git history
+3. Review logs for use of the secret
+4. Add the pattern to `.gitignore`
